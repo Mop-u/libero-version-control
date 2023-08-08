@@ -1,15 +1,39 @@
-import sys
+''' script to generate libero project from version-controllable source files '''
+
+# MIT License
+#
+# Copyright (c) 2023 Quinn Unger
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import os
 import re
 import json
 import argparse
+from enum import IntEnum
 
 parser = argparse.ArgumentParser(
     prog='genproj',
     description='generate libero project from version-controllable source files'
 )
 parser.add_argument('-c', '--config',
-    default='genproj.json'
+    default='./genproj.json'
 )
 parser.add_argument('-e', '--executable',
     default='libero'
@@ -18,19 +42,84 @@ args = parser.parse_args()
 
 # load the config json
 with open(args.config, encoding='utf8') as f:
-    config = json.load(f)
+    config = json.load(f)['libero']['project']
 
 # set working directory to the config's location, to ensure relative paths resolve properly.
+print(args.config)
 os.chdir(os.path.dirname(args.config))
 
-print(config['libero'])
+class SG(IntEnum):
+    ''' Enum indexes for search_group array '''
+    REGEX = 0
+    FILE = 1
+search_group = {
+    'search_hdl':    [ re.compile(".*\\.(sv|v|vhd)$", re.IGNORECASE), [] ],
+    'search_sdc':    [ re.compile(".*\\.sdc$",        re.IGNORECASE), [] ],
+    'search_ndc':    [ re.compile(".*\\.ndc$",        re.IGNORECASE), [] ],
+    'search_fdc':    [ re.compile(".*\\.fdc$",        re.IGNORECASE), [] ],
+    'search_vcd':    [ re.compile(".*\\.vcd$",        re.IGNORECASE), [] ],
+    'search_fp_pdc': [ re.compile(".*_fp\\.pdc$",     re.IGNORECASE), [] ],
+    'search_io_pdc': [ re.compile(".*_io\\.pdc$",     re.IGNORECASE), [] ],
+    'search_edif':   [ re.compile(".*\\.edif$",       re.IGNORECASE), [] ],
+    'search_tcl':    [ re.compile(".*\\.tcl$",        re.IGNORECASE), [] ]
+}
 
-re_edif       = re.compile(".*\\.edif$",       re.IGNORECASE)
-re_sdc        = re.compile(".*\\.sdc$",        re.IGNORECASE)
-re_ndc        = re.compile(".*\\.ndc$",        re.IGNORECASE)
-re_fp_pdc     = re.compile(".*_fp\\.pdc$",     re.IGNORECASE)
-re_io_pdc     = re.compile(".*_io\\.pdc$",     re.IGNORECASE)
-re_net_fdc    = re.compile(".*\\.fdc$",        re.IGNORECASE)
-re_vcd        = re.compile(".*\\.vcd$",        re.IGNORECASE)
-re_hdl_source = re.compile(".*\\.(sv|v|vhd)$", re.IGNORECASE)
-re_tcl_source = re.compile(".*\\.tcl$",        re.IGNORECASE)
+for search_key, search_type in search_group.items():
+    if search_key in config:
+        if 'file' in config[search_key]:
+            for file in config[search_key]['file']:
+                # explicitly included files bypass regex checks
+                search_type[SG.FILE].append(os.path.abspath(file))
+        if 'folder' in config[search_key]:
+            for entry in config[search_key]['folder']:
+                recurse = bool('recursive' in entry and entry['recursive'] is True)
+                for path, dirs, files in os.walk(entry['path']):
+                    for file in files:
+                        if search_type[SG.REGEX].match(file):
+                            search_type[SG.FILE].append(os.path.abspath(path+'/'+file))
+                    if recurse is False:
+                        break
+
+
+library = config['library']
+top = config['top']
+
+
+
+for file in search_group['search_hdl'][SG.FILE]:
+    print(f'create_links -library {{{library}}} -hdl_source {{{file}}}')
+for file in search_group['search_sdc'][SG.FILE]:
+    print(f'create_links -library {{{library}}} -sdc {{{file}}}')
+for file in search_group['search_ndc'][SG.FILE]:
+    print(f'create_links -library {{{library}}} -ndc {{{file}}}')
+for file in search_group['search_fdc'][SG.FILE]:
+    print(f'create_links -library {{{library}}} -fdc {{{file}}}')
+for file in search_group['search_vcd'][SG.FILE]:
+    print(f'create_links -library {{{library}}} -vcd {{{file}}}')
+for file in search_group['search_fp_pdc'][SG.FILE]:
+    print(f'create_links -library {{{library}}} -fp_pdc {{{file}}}')
+for file in search_group['search_io_pdc'][SG.FILE]:
+    print(f'create_links -library {{{library}}} -io_pdc {{{file}}}')
+for file in search_group['search_edif'][SG.FILE]:
+    print(f'create_links -library {{{library}}} -convert_EDN_to_HDL -edif {{{file}}}')
+for file in search_group['search_tcl'][SG.FILE]:
+    pass
+
+if 'enable_constraint' in config:
+    constraint = config['enable_constraint']
+    if 'PLACEROUTE' in constraint and constraint['PLACEROUTE']:
+        print('organize_tool_files -tool {{PLACEROUTE}} \\')
+        for file in constraint['PLACEROUTE']:
+            print(f'-file {{{os.path.abspath(file)}}} \\')
+        print(f'-module {{{config["top"]}::{library}}} -input_type {{constraint}}')
+    if 'SYNTHESIZE' in constraint and constraint['SYNTHESIZE']:
+        print('organize_tool_files -tool {{SYNTHESIZE}} \\')
+        for file in constraint['SYNTHESIZE']:
+            print(f'-file {{{os.path.abspath(file)}}} \\')
+        print(f'-module {{{config["top"]}::{library}}} -input_type {{constraint}}')
+    if 'VERIFYTIMING' in constraint and constraint['VERIFYTIMING']:
+        print('organize_tool_files -tool {{VERIFYTIMING}} \\')
+        for file in constraint['VERIFYTIMING']:
+            print(f'-file {{{os.path.abspath(file)}}} \\')
+        print(f'-module {{{config["top"]}::{library}}} -input_type {{constraint}}')
+    
