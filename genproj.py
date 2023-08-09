@@ -26,6 +26,8 @@ import sys
 import os
 import re
 import json
+import time
+import shutil
 import argparse
 from enum import IntEnum
 
@@ -34,7 +36,7 @@ parser = argparse.ArgumentParser(
     description='generate libero project from version-controllable source files'
 )
 parser.add_argument('-c', '--config',
-    default='./genproj.json'
+    default='config.json'
 )
 parser.add_argument('-e', '--executable',
     default='libero'
@@ -46,8 +48,10 @@ with open(args.config, encoding='utf8') as f:
     config = json.load(f)['libero']['project']
 
 # set working directory to the config's location, to ensure relative paths resolve properly.
-print(args.config)
-os.chdir(os.path.dirname(args.config))
+chdir_target = os.path.dirname(args.config)
+if chdir_target == '':
+    chdir_target = os.path.dirname(f'./{args.config}')
+os.chdir(chdir_target)
 
 class SG(IntEnum):
     ''' Enum indexes for search_group array '''
@@ -59,8 +63,10 @@ search_group = {
     'search_ndc':    [ re.compile(".*\\.ndc$",        re.IGNORECASE), [] ],
     'search_fdc':    [ re.compile(".*\\.fdc$",        re.IGNORECASE), [] ],
     'search_vcd':    [ re.compile(".*\\.vcd$",        re.IGNORECASE), [] ],
-    'search_fp_pdc': [ re.compile(".*_fp\\.pdc$",     re.IGNORECASE), [] ],
-    'search_io_pdc': [ re.compile(".*_io\\.pdc$",     re.IGNORECASE), [] ],
+    #'search_fp_pdc': [ re.compile(".*_fp\\.pdc$",     re.IGNORECASE), [] ],
+    'search_fp_pdc': [ re.compile(".*\\.pdc$",        re.IGNORECASE), [] ],
+    #'search_io_pdc': [ re.compile(".*_io\\.pdc$",     re.IGNORECASE), [] ],
+    'search_io_pdc': [ re.compile(".*\\.pdc$",        re.IGNORECASE), [] ],
     'search_edif':   [ re.compile(".*\\.edif$",       re.IGNORECASE), [] ],
     'search_tcl':    [ re.compile(".*\\.tcl$",        re.IGNORECASE), [] ]
 }
@@ -157,6 +163,8 @@ with open(out_tcl, 'a', encoding='utf8') as o:
         o.write(f'create_links -library {{{library}}} -io_pdc {{{file}}}\n')
     for file in search_group['search_edif'][SG.FILE]:
         o.write(f'create_links -library {{{library}}} -convert_EDN_to_HDL -edif {{{file}}}\n')
+    # Build heirarchy
+    o.write('build_design_hierarchy\n')
     # Fix file links in TCL includes
     for file in search_group['search_tcl'][SG.FILE]:
         o.write(f'\n# File: {file}\n')
@@ -165,27 +173,31 @@ with open(out_tcl, 'a', encoding='utf8') as o:
         for line in lines:
             o.write(re.sub(r'(^sd_instantiate_hdl_module.*-hdl_file {)(.*)(} -instance_name.*$)',
                 lambda m : m.group(1)+tracker.recall(m.group(2))+m.group(3), line))
+    # Set top level and rebuild heirarchy after running the tcl scripts
+    o.write(f'set_root {{{top}}}\n')
+    o.write('build_design_hierarchy\n')
     # Assign constraints
     if 'enable_constraint' in config:
         constraint = config['enable_constraint']
         if 'PLACEROUTE' in constraint and constraint['PLACEROUTE']:
-            o.write('organize_tool_files -tool {{PLACEROUTE}} \\\n')
+            o.write(r'organize_tool_files -tool {PLACEROUTE}')
             for file in constraint['PLACEROUTE']:
-                o.write(f'-file {{{os.path.abspath(file)}}} \\\n')
-            o.write(f'-module {{{top}::{library}}} -input_type {{constraint}}\n')
+                o.write(f' -file {{{os.path.abspath(file)}}}')
+            o.write(f' -module {{{top}::{library}}} -input_type {{constraint}}\n')
         if 'SYNTHESIZE' in constraint and constraint['SYNTHESIZE']:
-            o.write('organize_tool_files -tool {{SYNTHESIZE}} \\\n')
+            o.write(r'organize_tool_files -tool {SYNTHESIZE}')
             for file in constraint['SYNTHESIZE']:
-                o.write(f'-file {{{os.path.abspath(file)}}} \\\n')
-            o.write(f'-module {{{top}::{library}}} -input_type {{constraint}}\n')
+                o.write(f' -file {{{os.path.abspath(file)}}}')
+            o.write(f' -module {{{top}::{library}}} -input_type {{constraint}}\n')
         if 'VERIFYTIMING' in constraint and constraint['VERIFYTIMING']:
-            o.write('organize_tool_files -tool {{VERIFYTIMING}} \\\n')
+            o.write(r'organize_tool_files -tool {VERIFYTIMING}')
             for file in constraint['VERIFYTIMING']:
-                o.write(f'-file {{{os.path.abspath(file)}}} \\\n')
-            o.write(f'-module {{{top}::{library}}} -input_type {{constraint}}\n')
-    # Set root and build heirarchy
-    o.write(f'set_root {{{top}}}\n')
-    o.write('build_design_hierarchy\n')
+                o.write(f' -file {{{os.path.abspath(file)}}}')
+            o.write(f' -module {{{top}::{library}}} -input_type {{constraint}}\n')
     # Save and close project
     o.write('save_project\n')
     o.write('close_project\n')
+
+if config['backup'] is True and os.path.isdir(out_proj):
+    shutil.make_archive(f'{out_root}/backup/{proj_name}-{time.strftime("%Y%m%d-%H%M%S")}',
+        'zip', root_dir=out_proj, base_dir=out_proj)
