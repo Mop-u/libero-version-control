@@ -63,9 +63,7 @@ search_group = {
     'search_ndc':    [ re.compile(".*\\.ndc$",        re.IGNORECASE), [] ],
     'search_fdc':    [ re.compile(".*\\.fdc$",        re.IGNORECASE), [] ],
     'search_vcd':    [ re.compile(".*\\.vcd$",        re.IGNORECASE), [] ],
-    #'search_fp_pdc': [ re.compile(".*_fp\\.pdc$",     re.IGNORECASE), [] ],
     'search_fp_pdc': [ re.compile(".*\\.pdc$",        re.IGNORECASE), [] ],
-    #'search_io_pdc': [ re.compile(".*_io\\.pdc$",     re.IGNORECASE), [] ],
     'search_io_pdc': [ re.compile(".*\\.pdc$",        re.IGNORECASE), [] ],
     'search_edif':   [ re.compile(".*\\.edif$",       re.IGNORECASE), [] ],
     'search_tcl':    [ re.compile(".*\\.tcl$",        re.IGNORECASE), [] ]
@@ -74,7 +72,7 @@ search_group = {
 class Lookup:
     ''' File list lookup table builder with warning and error messages '''
     PATH = 0
-    DUPES = 1
+    DUPE = 1
     file_dict = {}
     def record(self,file_path):
         ''' Record filename & path to a dictionary & check for duplicate file basenames '''
@@ -83,14 +81,14 @@ class Lookup:
         if file_base in self.file_dict:
             print('Warning: Duplicate file found! This may screw with path substitutions!'\
                 f'\n\tStored: {self.file_dict[file_base][self.PATH]}\n\tFound: {file_full}')
-            self.file_dict[file_base][self.DUPES] += 1
+            self.file_dict[file_base][self.DUPE] += 1
         else:
             self.file_dict[file_base] = [file_full,0]
     def recall(self,file_path):
         ''' Strip file path down to the basename and look for a match in the dictionary '''
         file_base = os.path.basename(file_path)
         if file_base in self.file_dict:
-            if self.file_dict[file_base][self.DUPES] > 0:
+            if self.file_dict[file_base][self.DUPE] > 0:
                 print('Warning: Multiple files encountered while trying to do a path substitution!'\
                     f'\n\tPath to substitute: {file_path}'\
                     f'\n\tChoosing file: {self.file_dict[file_base][self.PATH]}')
@@ -104,21 +102,15 @@ tracker = Lookup()
 for search_key, search_type in search_group.items():
     if search_key not in config:
         continue
-    if 'file' in config[search_key]:
-        for file in config[search_key]['file']:
-            # explicitly included files bypass regex checks
-            search_type[SG.FILE].append(os.path.abspath(file))
-            tracker.record(file)
-    if 'folder' in config[search_key]:
-        for entry in config[search_key]['folder']:
-            recurse = bool('recursive' in entry and entry['recursive'] is True)
-            for path, dirs, files in os.walk(entry['path']):
-                for file in files:
-                    if search_type[SG.REGEX].match(file):
-                        search_type[SG.FILE].append(os.path.abspath(f'{path}/{file}'))
-                        tracker.record(f'{path}/{file}')
-                if recurse is False:
-                    break
+    for entry in config[search_key]:
+        recurse = bool('recursive' in entry and entry['recursive'] is True)
+        for path, dirs, files in os.walk(entry['path']):
+            for file in files:
+                if search_type[SG.REGEX].match(file):
+                    search_type[SG.FILE].append(os.path.abspath(f'{path}/{file}'))
+                    tracker.record(f'{path}/{file}')
+            if recurse is False:
+                break
 
 proj_name = config['name']
 library   = config['library']
