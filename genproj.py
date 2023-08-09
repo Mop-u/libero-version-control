@@ -29,6 +29,7 @@ import json
 import time
 import shutil
 import argparse
+import subprocess
 from enum import IntEnum
 
 parser = argparse.ArgumentParser(
@@ -40,6 +41,9 @@ parser.add_argument('-c', '--config',
 )
 parser.add_argument('-e', '--executable',
     default='libero'
+)
+parser.add_argument('-X', '--execute',
+    action='store_true'
 )
 args = parser.parse_args()
 
@@ -103,6 +107,11 @@ for search_key, search_type in search_group.items():
     if search_key not in config:
         continue
     for entry in config[search_key]:
+        if os.path.isfile(entry['path']):
+            # explicitly included files bypass regex checks
+            search_type[SG.FILE].append(os.path.abspath(entry['path']))
+            tracker.record(entry['path'])
+            continue
         recurse = bool('recursive' in entry and entry['recursive'] is True)
         for path, dirs, files in os.walk(entry['path']):
             for file in files:
@@ -116,7 +125,7 @@ proj_name = config['name']
 library   = config['library']
 top       = config['top']
 out_root  = os.path.abspath(config['output'])
-out_tcl   = os.path.abspath(f'{out_root}/{proj_name}.tcl')
+out_tcl   = os.path.abspath(f'{out_root}/genproj.tcl')
 out_proj  = os.path.abspath(f'{out_root}/{proj_name}')
 device    = config['device']
 settings  = config['project_settings']
@@ -191,5 +200,16 @@ with open(out_tcl, 'a', encoding='utf8') as o:
     o.write('close_project\n')
 
 if config['backup'] is True and os.path.isdir(out_proj):
+    print(f'Backing up project folder {out_proj}')
     shutil.make_archive(f'{out_root}/backup/{proj_name}-{time.strftime("%Y%m%d-%H%M%S")}',
         'zip', root_dir=out_proj, base_dir=out_proj)
+
+if args.execute:
+    out_log = os.path.abspath(f'{out_root}/genproj.log')
+    if os.path.isdir(out_proj):
+        shutil.rmtree(out_proj)
+    print('Libero is executing...')
+    subprocess.run([args.executable, f'SCRIPT:{out_tcl}', f'LOGFILE:{out_log}'],check=True)
+    #with open(out_log, encoding='utf8') as l:
+    #    print(l.read())
+    print(f'Libero log file saved to {out_log}')
