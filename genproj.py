@@ -117,14 +117,30 @@ for search_key, search_type in search_group.items():
 proj_name = config['name']
 library   = config['library']
 top       = config['top']
-out_path  = os.path.abspath(config['output'])
-out_tcl   = os.path.abspath(f'{out_path}/{proj_name}.tcl')
+out_root  = os.path.abspath(config['output'])
+out_tcl   = os.path.abspath(f'{out_root}/{proj_name}.tcl')
+out_proj  = os.path.abspath(f'{out_root}/{proj_name}')
+device    = config['device']
+settings  = config['project_settings']
 
 # clear the tcl if exists
 with open(out_tcl, 'w', encoding='utf8'):
     pass
 # write line-by-line
 with open(out_tcl, 'a', encoding='utf8') as o:
+    # Create project
+    o.write(f'new_project -location {{{out_proj}}}'\
+        f' -name {{{proj_name}}} -family {{{device["family"]}}} -die {{{device["die"]}}}'\
+        f' -package {{{device["package"]}}} -speed {{{device["speed"]}}}'\
+        f' -part_range {{{device["part_range"]}}} -hdl {{{settings["hdl"]}}}\n')
+    # Project settings
+    o.write('project_settings')
+    for key, val in settings.items():
+        o.write(f' -{key} {str(int(val is True)) if isinstance(val,bool) else f"{{{str(val)}}}"}')
+    o.write('\n')
+    # Get cores up to date
+    o.write('download_latest_cores\n')
+    # Link files
     for file in search_group['search_hdl'][SG.FILE]:
         o.write(f'create_links -library {{{library}}} -hdl_source {{{file}}}\n')
     for file in search_group['search_sdc'][SG.FILE]:
@@ -141,6 +157,7 @@ with open(out_tcl, 'a', encoding='utf8') as o:
         o.write(f'create_links -library {{{library}}} -io_pdc {{{file}}}\n')
     for file in search_group['search_edif'][SG.FILE]:
         o.write(f'create_links -library {{{library}}} -convert_EDN_to_HDL -edif {{{file}}}\n')
+    # Fix file links in TCL includes
     for file in search_group['search_tcl'][SG.FILE]:
         o.write(f'\n# File: {file}\n')
         with open(file, encoding='utf8') as f:
@@ -148,6 +165,7 @@ with open(out_tcl, 'a', encoding='utf8') as o:
         for line in lines:
             o.write(re.sub(r'(^sd_instantiate_hdl_module.*-hdl_file {)(.*)(} -instance_name.*$)',
                 lambda m : m.group(1)+tracker.recall(m.group(2))+m.group(3), line))
+    # Assign constraints
     if 'enable_constraint' in config:
         constraint = config['enable_constraint']
         if 'PLACEROUTE' in constraint and constraint['PLACEROUTE']:
@@ -165,3 +183,9 @@ with open(out_tcl, 'a', encoding='utf8') as o:
             for file in constraint['VERIFYTIMING']:
                 o.write(f'-file {{{os.path.abspath(file)}}} \\\n')
             o.write(f'-module {{{top}::{library}}} -input_type {{constraint}}\n')
+    # Set root and build heirarchy
+    o.write(f'set_root {{{top}}}\n')
+    o.write('build_design_hierarchy\n')
+    # Save and close project
+    o.write('save_project\n')
+    o.write('close_project\n')
