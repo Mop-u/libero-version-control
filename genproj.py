@@ -96,60 +96,72 @@ class Lookup:
 tracker = Lookup()
 
 for search_key, search_type in search_group.items():
-    if search_key in config:
-        if 'file' in config[search_key]:
-            for file in config[search_key]['file']:
-                # explicitly included files bypass regex checks
-                search_type[SG.FILE].append(os.path.abspath(file))
-                tracker.record(file)
-        if 'folder' in config[search_key]:
-            for entry in config[search_key]['folder']:
-                recurse = bool('recursive' in entry and entry['recursive'] is True)
-                for path, dirs, files in os.walk(entry['path']):
-                    for file in files:
-                        if search_type[SG.REGEX].match(file):
-                            search_type[SG.FILE].append(os.path.abspath(path+'/'+file))
-                            tracker.record(path+'/'+file)
-                    if recurse is False:
-                        break
+    if search_key not in config:
+        continue
+    if 'file' in config[search_key]:
+        for file in config[search_key]['file']:
+            # explicitly included files bypass regex checks
+            search_type[SG.FILE].append(os.path.abspath(file))
+            tracker.record(file)
+    if 'folder' in config[search_key]:
+        for entry in config[search_key]['folder']:
+            recurse = bool('recursive' in entry and entry['recursive'] is True)
+            for path, dirs, files in os.walk(entry['path']):
+                for file in files:
+                    if search_type[SG.REGEX].match(file):
+                        search_type[SG.FILE].append(os.path.abspath(f'{path}/{file}'))
+                        tracker.record(f'{path}/{file}')
+                if recurse is False:
+                    break
 
-library = config['library']
-top = config['top']
+proj_name = config['name']
+library   = config['library']
+top       = config['top']
+out_path  = os.path.abspath(config['output'])
+out_tcl   = os.path.abspath(f'{out_path}/{proj_name}.tcl')
 
-for file in search_group['search_hdl'][SG.FILE]:
-    print(f'create_links -library {{{library}}} -hdl_source {{{file}}}')
-for file in search_group['search_sdc'][SG.FILE]:
-    print(f'create_links -library {{{library}}} -sdc {{{file}}}')
-for file in search_group['search_ndc'][SG.FILE]:
-    print(f'create_links -library {{{library}}} -ndc {{{file}}}')
-for file in search_group['search_fdc'][SG.FILE]:
-    print(f'create_links -library {{{library}}} -fdc {{{file}}}')
-for file in search_group['search_vcd'][SG.FILE]:
-    print(f'create_links -library {{{library}}} -vcd {{{file}}}')
-for file in search_group['search_fp_pdc'][SG.FILE]:
-    print(f'create_links -library {{{library}}} -fp_pdc {{{file}}}')
-for file in search_group['search_io_pdc'][SG.FILE]:
-    print(f'create_links -library {{{library}}} -io_pdc {{{file}}}')
-for file in search_group['search_edif'][SG.FILE]:
-    print(f'create_links -library {{{library}}} -convert_EDN_to_HDL -edif {{{file}}}')
-for file in search_group['search_tcl'][SG.FILE]:
+# clear the tcl if exists
+with open(out_tcl, 'w', encoding='utf8'):
     pass
-
-if 'enable_constraint' in config:
-    constraint = config['enable_constraint']
-    if 'PLACEROUTE' in constraint and constraint['PLACEROUTE']:
-        print('organize_tool_files -tool {{PLACEROUTE}} \\')
-        for file in constraint['PLACEROUTE']:
-            print(f'-file {{{os.path.abspath(file)}}} \\')
-        print(f'-module {{{top}::{library}}} -input_type {{constraint}}')
-    if 'SYNTHESIZE' in constraint and constraint['SYNTHESIZE']:
-        print('organize_tool_files -tool {{SYNTHESIZE}} \\')
-        for file in constraint['SYNTHESIZE']:
-            print(f'-file {{{os.path.abspath(file)}}} \\')
-        print(f'-module {{{top}::{library}}} -input_type {{constraint}}')
-    if 'VERIFYTIMING' in constraint and constraint['VERIFYTIMING']:
-        print('organize_tool_files -tool {{VERIFYTIMING}} \\')
-        for file in constraint['VERIFYTIMING']:
-            print(f'-file {{{os.path.abspath(file)}}} \\')
-        print(f'-module {{{top}::{library}}} -input_type {{constraint}}')
-    
+# write line-by-line
+with open(out_tcl, 'a', encoding='utf8') as o:
+    for file in search_group['search_hdl'][SG.FILE]:
+        o.write(f'create_links -library {{{library}}} -hdl_source {{{file}}}\n')
+    for file in search_group['search_sdc'][SG.FILE]:
+        o.write(f'create_links -library {{{library}}} -sdc {{{file}}}\n')
+    for file in search_group['search_ndc'][SG.FILE]:
+        o.write(f'create_links -library {{{library}}} -ndc {{{file}}}\n')
+    for file in search_group['search_fdc'][SG.FILE]:
+        o.write(f'create_links -library {{{library}}} -fdc {{{file}}}\n')
+    for file in search_group['search_vcd'][SG.FILE]:
+        o.write(f'create_links -library {{{library}}} -vcd {{{file}}}\n')
+    for file in search_group['search_fp_pdc'][SG.FILE]:
+        o.write(f'create_links -library {{{library}}} -fp_pdc {{{file}}}\n')
+    for file in search_group['search_io_pdc'][SG.FILE]:
+        o.write(f'create_links -library {{{library}}} -io_pdc {{{file}}}\n')
+    for file in search_group['search_edif'][SG.FILE]:
+        o.write(f'create_links -library {{{library}}} -convert_EDN_to_HDL -edif {{{file}}}\n')
+    for file in search_group['search_tcl'][SG.FILE]:
+        o.write(f'\n# File: {file}\n')
+        with open(file, encoding='utf8') as f:
+            lines = f.readlines()
+        for line in lines:
+            o.write(re.sub(r'(^sd_instantiate_hdl_module.*-hdl_file {)(.*)(} -instance_name.*$)',
+                lambda m : m.group(1)+tracker.recall(m.group(2))+m.group(3), line))
+    if 'enable_constraint' in config:
+        constraint = config['enable_constraint']
+        if 'PLACEROUTE' in constraint and constraint['PLACEROUTE']:
+            o.write('organize_tool_files -tool {{PLACEROUTE}} \\\n')
+            for file in constraint['PLACEROUTE']:
+                o.write(f'-file {{{os.path.abspath(file)}}} \\\n')
+            o.write(f'-module {{{top}::{library}}} -input_type {{constraint}}\n')
+        if 'SYNTHESIZE' in constraint and constraint['SYNTHESIZE']:
+            o.write('organize_tool_files -tool {{SYNTHESIZE}} \\\n')
+            for file in constraint['SYNTHESIZE']:
+                o.write(f'-file {{{os.path.abspath(file)}}} \\\n')
+            o.write(f'-module {{{top}::{library}}} -input_type {{constraint}}\n')
+        if 'VERIFYTIMING' in constraint and constraint['VERIFYTIMING']:
+            o.write('organize_tool_files -tool {{VERIFYTIMING}} \\\n')
+            for file in constraint['VERIFYTIMING']:
+                o.write(f'-file {{{os.path.abspath(file)}}} \\\n')
+            o.write(f'-module {{{top}::{library}}} -input_type {{constraint}}\n')
