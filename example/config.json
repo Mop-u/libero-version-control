@@ -1,0 +1,84 @@
+{
+    "libero":
+    {
+        "project":
+        {   
+            "backup": true,
+            "name": "example_project",
+            "output": "./",
+            "top": "top_level",
+            "library": "work",
+            "device":
+            {
+                "family":     "PolarFire",
+                "die":        "MPF300TS",
+                "package":    "FCG784",
+                "part_range": "IND",
+                "speed":      "STD"
+            },
+            "project_settings":
+            {
+                "hdl": "VERILOG",
+                "verilog_mode": "SYSTEM_VERILOG",
+                "vhdl_mode": "VHDL_2008",
+                "system_verilog_mfcu": true,
+                "auto_update_modelsim_ini": true,
+                "auto_update_viewdraw_ini": true,
+                "enable_viewdraw": false,
+                "standalone_peripheral_initialization": false,
+                "instantiate_in_smartdesign": false,
+                "ondemand_build_dh": true,
+                "auto_generate_synth_hdl": false,
+                "auto_generate_physynth_hdl": false,
+                "auto_run_drc": false,
+                "auto_generate_viewdraw_hdl": true,
+                "auto_file_detection": true,
+                "sim_flow_mode": false,
+                "vm_netlist_flow": true,
+                "enable_set_mitigation": false,
+                "enable_design_separation": false,
+                "display_fanout_limit": 10,
+                "abort_flow_on_sdc_errors": true,
+                "abort_flow_on_pdc_errors": true,
+                "block_mode": false
+            },
+            "search_hdl":
+            [
+                {"path":"./src/rtl","recursive":true}
+            ],
+            "search_fp_pdc":
+            [
+                {"path":"./src/user_fp.pdc"}
+            ],
+            "search_io_pdc":
+            [
+                {"path":"./src/user_io.pdc"}
+            ],
+            "search_sdc":
+            [
+                {"path":"./src/user.sdc"}
+            ],
+            "search_tcl":
+            [
+                {"path":"./src/tcl"}
+            ],
+            "enable_constraint":
+            {
+                "PLACEROUTE":
+                [
+                    "./src/user_fp.pdc",
+                    "./src/user_io.pdc",
+                    "./src/user.sdc"
+                ],
+                "SYNTHESIZE":
+                [
+                    "./src/user.sdc"
+                ],
+                "VERIFYTIMING":
+                [
+                    "./src/user.sdc"
+                ]
+            }
+        }
+    }
+}

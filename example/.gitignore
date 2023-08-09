@@ -1,0 +1,5 @@
+*
+!src/
+!src/**/*
+!config.json
+!.gitignore
