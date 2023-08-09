@@ -22,6 +22,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import sys
 import os
 import re
 import json
@@ -64,12 +65,43 @@ search_group = {
     'search_tcl':    [ re.compile(".*\\.tcl$",        re.IGNORECASE), [] ]
 }
 
+class Lookup:
+    ''' File list lookup table builder with warning and error messages '''
+    PATH = 0
+    DUPES = 1
+    file_dict = {}
+    def record(self,file_path):
+        ''' Record filename & path to a dictionary & check for duplicate file basenames '''
+        file_full = os.path.abspath(file_path)
+        file_base = os.path.basename(file_path)
+        if file_base in self.file_dict:
+            print('Warning: Duplicate file found! This may screw with path substitutions!'\
+                f'\n\tStored: {self.file_dict[file_base][self.PATH]}\n\tFound: {file_full}')
+            self.file_dict[file_base][self.DUPES] += 1
+        else:
+            self.file_dict[file_base] = [file_full,0]
+    def recall(self,file_path):
+        ''' Strip file path down to the basename and look for a match in the dictionary '''
+        file_base = os.path.basename(file_path)
+        if file_base in self.file_dict:
+            if self.file_dict[file_base][self.DUPES] > 0:
+                print('Warning: Multiple files encountered while trying to do a path substitution!'\
+                    f'\n\tPath to substitute: {file_path}'\
+                    f'\n\tChoosing file: {self.file_dict[file_base][self.PATH]}')
+            return self.file_dict[file_base][self.PATH]
+        print('Error: Unable to find suitable path substitution! (local file not found)'\
+            f'\n\tSearch target: {file_base}\n\tReferenced from: {file_path}')
+        sys.exit()
+
+tracker = Lookup()
+
 for search_key, search_type in search_group.items():
     if search_key in config:
         if 'file' in config[search_key]:
             for file in config[search_key]['file']:
                 # explicitly included files bypass regex checks
                 search_type[SG.FILE].append(os.path.abspath(file))
+                tracker.record(file)
         if 'folder' in config[search_key]:
             for entry in config[search_key]['folder']:
                 recurse = bool('recursive' in entry and entry['recursive'] is True)
@@ -77,14 +109,12 @@ for search_key, search_type in search_group.items():
                     for file in files:
                         if search_type[SG.REGEX].match(file):
                             search_type[SG.FILE].append(os.path.abspath(path+'/'+file))
+                            tracker.record(path+'/'+file)
                     if recurse is False:
                         break
 
-
 library = config['library']
 top = config['top']
-
-
 
 for file in search_group['search_hdl'][SG.FILE]:
     print(f'create_links -library {{{library}}} -hdl_source {{{file}}}')
@@ -111,15 +141,15 @@ if 'enable_constraint' in config:
         print('organize_tool_files -tool {{PLACEROUTE}} \\')
         for file in constraint['PLACEROUTE']:
             print(f'-file {{{os.path.abspath(file)}}} \\')
-        print(f'-module {{{config["top"]}::{library}}} -input_type {{constraint}}')
+        print(f'-module {{{top}::{library}}} -input_type {{constraint}}')
     if 'SYNTHESIZE' in constraint and constraint['SYNTHESIZE']:
         print('organize_tool_files -tool {{SYNTHESIZE}} \\')
         for file in constraint['SYNTHESIZE']:
             print(f'-file {{{os.path.abspath(file)}}} \\')
-        print(f'-module {{{config["top"]}::{library}}} -input_type {{constraint}}')
+        print(f'-module {{{top}::{library}}} -input_type {{constraint}}')
     if 'VERIFYTIMING' in constraint and constraint['VERIFYTIMING']:
         print('organize_tool_files -tool {{VERIFYTIMING}} \\')
         for file in constraint['VERIFYTIMING']:
             print(f'-file {{{os.path.abspath(file)}}} \\')
-        print(f'-module {{{config["top"]}::{library}}} -input_type {{constraint}}')
+        print(f'-module {{{top}::{library}}} -input_type {{constraint}}')
     
