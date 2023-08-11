@@ -191,7 +191,7 @@ with open(out_tcl, 'a', encoding='utf8') as o:
     o.write('close_project\n')
 
 if config['backup'] is True and os.path.isdir(out_proj):
-    out_back = f'{out_root}/backup/{proj_name}-{time.strftime("%Y%m%d-%H%M%S")}'
+    out_back = os.path.abspath(f'{out_root}/backup/{proj_name}-{time.strftime("%Y%m%d-%H%M%S")}')
     print(f'Backing up project folder {out_proj} to {out_back}')
     shutil.make_archive(out_back,
         'zip', root_dir=out_proj, base_dir=out_proj)
