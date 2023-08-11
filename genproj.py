@@ -62,15 +62,17 @@ class SG(IntEnum):
     REGEX = 0
     FILE = 1
 search_group = {
-    'search_hdl':    [ re.compile(".*\\.(sv|v|vhd)$", re.IGNORECASE), [] ],
-    'search_sdc':    [ re.compile(".*\\.sdc$",        re.IGNORECASE), [] ],
-    'search_ndc':    [ re.compile(".*\\.ndc$",        re.IGNORECASE), [] ],
-    'search_fdc':    [ re.compile(".*\\.fdc$",        re.IGNORECASE), [] ],
-    'search_vcd':    [ re.compile(".*\\.vcd$",        re.IGNORECASE), [] ],
-    'search_fp_pdc': [ re.compile(".*\\.pdc$",        re.IGNORECASE), [] ],
-    'search_io_pdc': [ re.compile(".*\\.pdc$",        re.IGNORECASE), [] ],
-    'search_edif':   [ re.compile(".*\\.edif$",       re.IGNORECASE), [] ],
-    'search_tcl':    [ re.compile(".*\\.tcl$",        re.IGNORECASE), [] ]
+    'search_hdl':         [ re.compile(".*\\.(sv|v|vhd)$", re.IGNORECASE), [] ],
+    'search_sdc':         [ re.compile(".*\\.sdc$",        re.IGNORECASE), [] ],
+    'search_ndc':         [ re.compile(".*\\.ndc$",        re.IGNORECASE), [] ],
+    'search_fdc':         [ re.compile(".*\\.fdc$",        re.IGNORECASE), [] ],
+    'search_vcd':         [ re.compile(".*\\.vcd$",        re.IGNORECASE), [] ],
+    'search_fp_pdc':      [ re.compile(".*\\.pdc$",        re.IGNORECASE), [] ],
+    'search_io_pdc':      [ re.compile(".*\\.pdc$",        re.IGNORECASE), [] ],
+    'search_edif':        [ re.compile(".*\\.edif$",       re.IGNORECASE), [] ],
+    'search_component':   [ re.compile(".*\\.tcl$",        re.IGNORECASE), [] ],
+    'search_smartdesign': [ re.compile(".*\\.tcl$",        re.IGNORECASE), [] ],
+    'search_tcl':         [ re.compile(".*\\.tcl$",        re.IGNORECASE), [] ]
 }
 
 class Lookup:
@@ -126,6 +128,7 @@ library   = config['library']
 top       = config['top']
 out_root  = os.path.abspath(config['output'])
 out_tcl   = os.path.abspath(f'{out_root}/genproj.tcl')
+out_log   = os.path.abspath(f'{out_root}/genproj.log')
 out_proj  = os.path.abspath(f'{out_root}/{proj_name}')
 device    = config['device']
 settings  = config['project_settings']
@@ -166,50 +169,46 @@ with open(out_tcl, 'a', encoding='utf8') as o:
         o.write(f'create_links -library {{{library}}} -convert_EDN_to_HDL -edif {{{file}}}\n')
     # Build heirarchy
     o.write('build_design_hierarchy\n')
-    # Fix file links in TCL includes
-    for file in search_group['search_tcl'][SG.FILE]:
+    # Import components first
+    for file in search_group['search_component'][SG.FILE]:
+        o.write(f'source {{{file}}}\n')
+    # Copy over and fix file links in smartdesign TCL
+    for file in search_group['search_smartdesign'][SG.FILE]:
         o.write(f'\n# File: {file}\n')
         with open(file, encoding='utf8') as f:
             lines = f.readlines()
         for line in lines:
             o.write(re.sub(r'(^sd_instantiate_hdl_module.*-hdl_file {)(.*)(} -instance_name.*$)',
-                lambda m : m.group(1)+tracker.recall(m.group(2))+m.group(3), line))
+                lambda m : f'{m.group(1)}{tracker.recall(m.group(2))}{m.group(3)}', line))
     # Set top level and rebuild heirarchy after running the tcl scripts
     o.write(f'set_root {{{top}}}\n')
     o.write('build_design_hierarchy\n')
-    # Assign constraints
-    if 'enable_constraint' in config:
-        constraint = config['enable_constraint']
-        if 'PLACEROUTE' in constraint and constraint['PLACEROUTE']:
-            o.write(r'organize_tool_files -tool {PLACEROUTE}')
-            for file in constraint['PLACEROUTE']:
-                o.write(f' -file {{{os.path.abspath(file)}}}')
-            o.write(f' -module {{{top}::{library}}} -input_type {{constraint}}\n')
-        if 'SYNTHESIZE' in constraint and constraint['SYNTHESIZE']:
-            o.write(r'organize_tool_files -tool {SYNTHESIZE}')
-            for file in constraint['SYNTHESIZE']:
-                o.write(f' -file {{{os.path.abspath(file)}}}')
-            o.write(f' -module {{{top}::{library}}} -input_type {{constraint}}\n')
-        if 'VERIFYTIMING' in constraint and constraint['VERIFYTIMING']:
-            o.write(r'organize_tool_files -tool {VERIFYTIMING}')
-            for file in constraint['VERIFYTIMING']:
-                o.write(f' -file {{{os.path.abspath(file)}}}')
-            o.write(f' -module {{{top}::{library}}} -input_type {{constraint}}\n')
+    # Source misc tcl files
+    for file in search_group['search_tcl'][SG.FILE]:
+        o.write(f'source {{{file}}}\n')
     # Save and close project
     o.write('save_project\n')
     o.write('close_project\n')
 
 if config['backup'] is True and os.path.isdir(out_proj):
-    print(f'Backing up project folder {out_proj}')
-    shutil.make_archive(f'{out_root}/backup/{proj_name}-{time.strftime("%Y%m%d-%H%M%S")}',
+    out_back = f'{out_root}/backup/{proj_name}-{time.strftime("%Y%m%d-%H%M%S")}'
+    print(f'Backing up project folder {out_proj} to {out_back}')
+    shutil.make_archive(out_back,
         'zip', root_dir=out_proj, base_dir=out_proj)
 
 if args.execute:
-    out_log = os.path.abspath(f'{out_root}/genproj.log')
     if os.path.isdir(out_proj):
         shutil.rmtree(out_proj)
+    if os.path.isfile(out_log):
+        os.remove(out_log)
     print('Libero is executing...')
-    subprocess.run([args.executable, f'SCRIPT:{out_tcl}', f'LOGFILE:{out_log}'],check=True)
-    #with open(out_log, encoding='utf8') as l:
-    #    print(l.read())
-    print(f'Libero log file saved to {out_log}')
+    try:
+        subprocess.run([args.executable, f'SCRIPT:{out_tcl}', f'LOGFILE:{out_log}'],check=True)
+    except subprocess.CalledProcessError:
+        if os.path.isfile(out_log):
+            with open(out_log, encoding='utf8') as l:
+                print(l.read())
+        else:
+            print(f'Libero failed to execute... Try running {{{out_tcl}}} from libero\'s GUI')
+    if os.path.isfile(out_log):
+        print(f'Libero log file saved to {out_log}')

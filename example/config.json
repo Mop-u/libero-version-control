@@ -58,27 +58,18 @@
             [
                 {"path":"./src/user.sdc"}
             ],
+            "search_component":
+            [
+                {"path":"./src/component"}
+            ],
+            "search_smartdesign":
+            [
+                {"path":"./src/smartdesign"}
+            ],
             "search_tcl":
             [
-                {"path":"./src/tcl"}
-            ],
-            "enable_constraint":
-            {
-                "PLACEROUTE":
-                [
-                    "./src/user_fp.pdc",
-                    "./src/user_io.pdc",
-                    "./src/user.sdc"
-                ],
-                "SYNTHESIZE":
-                [
-                    "./src/user.sdc"
-                ],
-                "VERIFYTIMING":
-                [
-                    "./src/user.sdc"
-                ]
-            }
+                {"path":"./src/configure_tools.tcl"}
+            ]
         }
     }
 }
