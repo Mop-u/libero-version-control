@@ -27,6 +27,7 @@ import os
 import re
 import json
 import time
+import ntpath
 import shutil
 import argparse
 import subprocess
@@ -92,7 +93,7 @@ class Lookup:
             self.file_dict[file_base] = [file_full,0]
     def recall(self,file_path):
         ''' Strip file path down to the basename and look for a match in the dictionary '''
-        file_base = os.path.basename(file_path)
+        file_base = ntpath.basename(file_path) if '\\' in file_path else os.path.basename(file_path)
         if file_base in self.file_dict:
             if self.file_dict[file_base][self.DUPE] > 0:
                 print('Warning: Multiple files encountered while trying to do a path substitution!'\
