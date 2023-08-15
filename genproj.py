@@ -63,17 +63,17 @@ class SG(IntEnum):
     REGEX = 0
     FILE = 1
 search_group = {
-    'search_hdl':         [ re.compile(".*\\.(sv|v|vhd)$", re.IGNORECASE), [] ],
-    'search_sdc':         [ re.compile(".*\\.sdc$",        re.IGNORECASE), [] ],
-    'search_ndc':         [ re.compile(".*\\.ndc$",        re.IGNORECASE), [] ],
-    'search_fdc':         [ re.compile(".*\\.fdc$",        re.IGNORECASE), [] ],
-    'search_vcd':         [ re.compile(".*\\.vcd$",        re.IGNORECASE), [] ],
-    'search_fp_pdc':      [ re.compile(".*\\.pdc$",        re.IGNORECASE), [] ],
-    'search_io_pdc':      [ re.compile(".*\\.pdc$",        re.IGNORECASE), [] ],
-    'search_edif':        [ re.compile(".*\\.edif$",       re.IGNORECASE), [] ],
-    'search_component':   [ re.compile(".*\\.tcl$",        re.IGNORECASE), [] ],
-    'search_smartdesign': [ re.compile(".*\\.tcl$",        re.IGNORECASE), [] ],
-    'search_tcl':         [ re.compile(".*\\.tcl$",        re.IGNORECASE), [] ]
+    'search_hdl':         [ re.compile(".*\\.(sv|svh|v|vh|vhd)$", re.IGNORECASE), [] ],
+    'search_sdc':         [ re.compile(".*\\.sdc$",  re.IGNORECASE), [] ],
+    'search_ndc':         [ re.compile(".*\\.ndc$",  re.IGNORECASE), [] ],
+    'search_fdc':         [ re.compile(".*\\.fdc$",  re.IGNORECASE), [] ],
+    'search_vcd':         [ re.compile(".*\\.vcd$",  re.IGNORECASE), [] ],
+    'search_fp_pdc':      [ re.compile(".*\\.pdc$",  re.IGNORECASE), [] ],
+    'search_io_pdc':      [ re.compile(".*\\.pdc$",  re.IGNORECASE), [] ],
+    'search_edif':        [ re.compile(".*\\.edif$", re.IGNORECASE), [] ],
+    'search_component':   [ re.compile(".*\\.tcl$",  re.IGNORECASE), [] ],
+    'search_smartdesign': [ re.compile(".*\\.tcl$",  re.IGNORECASE), [] ],
+    'search_tcl':         [ re.compile(".*\\.tcl$",  re.IGNORECASE), [] ]
 }
 
 class Lookup:
