@@ -211,5 +211,7 @@ if args.execute:
                 print(l.read())
         else:
             print(f'Libero failed to execute... Try running {{{out_tcl}}} from libero\'s GUI')
+    except FileNotFoundError:
+        print(f'Could not find Libero executable at {args.executable}\n\tTry adding libero to PATH or using -e path/to/libero')
     if os.path.isfile(out_log):
         print(f'Libero log file saved to {out_log}')
